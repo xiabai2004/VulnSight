@@ -35,3 +35,7 @@ publish*.py
 *.bat
 
 create_repo*
+
+# Temp scripts
+check_*.py
+fix_*.py

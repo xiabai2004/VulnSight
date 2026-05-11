@@ -44,7 +44,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
-    parser.add_argument("input", help="RayScan JSON report file or directory")
+    parser.add_argument("input", nargs="?", help="RayScan JSON report file or directory")
     parser.add_argument("-o", "--output", help="Output file path")
     parser.add_argument(
         "--format", choices=["html", "md", "markdown"],
@@ -62,6 +62,10 @@ def main():
 
     if args.version:
         print(f"VulnSight v{__version__}")
+        return
+
+    if not args.input:
+        parser.print_help()
         return
 
     input_path = Path(args.input)
