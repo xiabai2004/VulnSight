@@ -1,38 +1,37 @@
-"""VulnSight CLI 鈥?鍛戒护琛屽叆鍙?""
+"""VulnSight CLI -- command-line interface"""
 
 import argparse
-import sys
 import io
+import sys
 from pathlib import Path
 
-# Fix Windows console encoding
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
-from . import __version__
-from .parser import parse_file, parse_directory
-from .analyzer import Analyzer
-from .reporter import generate_html, generate_markdown, save_report
+from . import __version__  # noqa: E402
+from .parser import parse_file, parse_directory  # noqa: E402
+from .analyzer import Analyzer  # noqa: E402
+from .reporter import generate_html, generate_markdown, save_report  # noqa: E402
 
 
 EPILOG = """
-绀轰緥:
-  # 鍒嗘瀽鍗曚釜鎶ュ憡
+Examples:
+  # Analyze a single report
   vulnsight scan_reports/report.json
 
-  # 鍒嗘瀽鏁翠釜鐩綍
+  # Analyze an entire directory
   vulnsight scan_reports/
 
-  # 杈撳嚭 HTML 鎶ュ憡
+  # Output HTML report
   vulnsight report.json -o report.html
 
-  # 璁剧疆 API Key 鍚敤 AI 鍒嗘瀽
-  export VULSENSE_API_KEY=your-api-key
+  # AI-powered analysis (set VULSENSE_API_KEY env var)
+  export VULSENSE_API_KEY=sk-your-key
   vulnsight report.json --ai
 
-  # 杈撳嚭 Markdown
+  # Markdown output
   vulnsight report.json -o report.md --format md
 
-  # 鏌ョ湅鎶ュ憡姒傝
+  # Just show summary
   vulnsight report.json --summary
 """
 
@@ -40,40 +39,24 @@ EPILOG = """
 def main():
     parser = argparse.ArgumentParser(
         prog="vulnsight",
-        description="VulnSight 鈥?AI-powered vulnerability report analyzer 馃洝锔?,
+        description="VulnSight -- AI-powered vulnerability report analyzer",
         epilog=EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
-    parser.add_argument(
-        "input",
-        help="RayScan JSON 鎶ュ憡鏂囦欢鎴栫洰褰?,
-    )
-    parser.add_argument(
-        "-o", "--output",
-        help="杈撳嚭鏂囦欢璺緞锛堣嚜鍔ㄦ牴鎹悗缂€鍐冲畾鏍煎紡锛?,
-    )
+    parser.add_argument("input", help="RayScan JSON report file or directory")
+    parser.add_argument("-o", "--output", help="Output file path")
     parser.add_argument(
         "--format", choices=["html", "md", "markdown"],
-        default="html",
-        help="杈撳嚭鏍煎紡锛堥粯璁?html锛?,
+        default="html", help="Output format (default: html)"
     )
     parser.add_argument(
         "--ai", action="store_true",
-        help="鍚敤 AI 鍒嗘瀽锛堥渶璁剧疆 VULSENSE_API_KEY 鐜鍙橀噺锛?,
+        help="Enable AI analysis (requires VULSENSE_API_KEY env var)"
     )
-    parser.add_argument(
-        "--summary", action="store_true",
-        help="浠呮樉绀烘瑙堟憳瑕?,
-    )
-    parser.add_argument(
-        "--model", default="deepseek-chat",
-        help="LLM 妯″瀷鍚嶇О锛堥粯璁?deepseek-chat锛?,
-    )
-    parser.add_argument(
-        "-V", "--version", action="store_true",
-        help="鏄剧ず鐗堟湰淇℃伅",
-    )
+    parser.add_argument("--summary", action="store_true", help="Show summary only")
+    parser.add_argument("--model", default="deepseek-chat", help="LLM model name")
+    parser.add_argument("-V", "--version", action="store_true", help="Show version")
 
     args = parser.parse_args()
 
@@ -83,64 +66,58 @@ def main():
 
     input_path = Path(args.input)
     if not input_path.exists():
-        print(f"鉂?杈撳叆璺緞涓嶅瓨鍦? {input_path}")
+        print(f"Error: path not found: {input_path}")
         sys.exit(1)
 
-    # 瑙ｆ瀽鎶ュ憡
-    print(f"馃搨 姝ｅ湪瑙ｆ瀽: {input_path.name if input_path.is_file() else str(input_path)}")
+    print(f"Parsing: {input_path.name if input_path.is_file() else str(input_path)}")
     if input_path.is_file():
         reports = [parse_file(input_path)]
     else:
         reports = parse_directory(input_path)
 
     if not reports:
-        print("鉂?鏈壘鍒版湁鏁堟姤鍛?)
+        print("Error: no valid reports found")
         sys.exit(1)
 
-    # 鏄剧ず姒傝
-    print(f"馃搳 鍏?{len(reports)} 涓姤鍛婏紝{sum(r.total_vulnerabilities for r in reports)} 涓紡娲瀄n")
+    total_vulns = sum(r.total_vulnerabilities for r in reports)
+    print(f"Found {len(reports)} report(s), {total_vulns} vulnerabilities\n")
 
     for r in reports:
         sev = r.severity_summary
         high = sev.get("critical", 0) + sev.get("high", 0)
-        print(f"  馃搫 {r.target}")
-        print(f"     鈴?{r.scan_time} | 鑰楁椂 {r.duration_str}")
-        print(f"     馃悰 鍏?{r.total_vulnerabilities} 涓紡娲?)
-        print(f"        楂樺嵄 {high} | 涓嵄 {sev.get('medium',0)} | 浣庡嵄 {sev.get('low',0)} | 淇℃伅 {sev.get('info',0)}")
+        print(f"  Target: {r.target}")
+        print(f"  Time: {r.scan_time} | Duration: {r.duration_str}")
+        print(f"  Total: {r.total_vulnerabilities} (High: {high}, "
+              f"Med: {sev.get('medium', 0)}, Low: {sev.get('low', 0)}, Info: {sev.get('info', 0)})")
         print()
 
     if args.summary:
         return
 
-    # 鍒嗘瀽
-    print("馃敩 姝ｅ湪鍒嗘瀽婕忔礊...")
+    print("Analyzing vulnerabilities...")
     analyzer = Analyzer(api_key=None if not args.ai else None)
 
     for report in reports:
         result = analyzer.analyze_report(report)
 
-        # 鐢熸垚鎶ュ憡
-        format = args.format
+        fmt = args.format
         if args.output:
             out_path = Path(args.output)
             if out_path.suffix == ".md":
-                format = "md"
+                fmt = "md"
             elif out_path.suffix == ".html":
-                format = "html"
+                fmt = "html"
         else:
-            out_path = input_path.stem + "_vulnsight.html"
-            if format in ("md", "markdown"):
-                out_path = input_path.stem + "_vulnsight.md"
+            stem = Path(input_path).stem
+            out_path = f"{stem}_vulnsight.html"
+            if fmt in ("md", "markdown"):
+                out_path = f"{stem}_vulnsight.md"
 
-        if format in ("md", "markdown"):
-            output = generate_markdown(result)
-        else:
-            output = generate_html(result, __version__)
-
+        output = generate_markdown(result) if fmt in ("md", "markdown") else generate_html(result, __version__)
         saved = save_report(output, out_path)
-        print(f"鉁?鎶ュ憡宸茬敓鎴? {saved}")
+        print(f"Report saved: {saved}")
 
-    print(f"\n鉁?鍒嗘瀽瀹屾垚锛佸叡 {sum(r.total_vulnerabilities for r in reports)} 涓紡娲炲垎鏋愬畬姣?)
+    print(f"\nDone! {total_vulns} vulnerabilities analyzed.")
 
 
 if __name__ == "__main__":
