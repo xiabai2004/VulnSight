@@ -1,0 +1,267 @@
+"""鎶ュ憡鐢熸垚鍣?鈥?鐢熸垚 HTML / Markdown 鏍煎紡鐨勫垎鏋愭姤鍛?""
+
+from datetime import datetime
+from pathlib import Path
+from .parser import ScanReport
+from .analyzer import Analyzer
+
+
+SEVERITY_COLORS = {
+    "critical": "#dc3545",
+    "high": "#fd7e14",
+    "medium": "#ffc107",
+    "low": "#20c997",
+    "info": "#6c757d",
+}
+
+SEVERITY_BG = {
+    "critical": "#fff5f5",
+    "high": "#fff8e8",
+    "medium": "#fffce0",
+    "low": "#f0fff4",
+    "info": "#f8f9fa",
+}
+
+HTML_TEMPLATE = """<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VulnSight 瀹夊叏鍒嗘瀽鎶ュ憡 鈥?{target}</title>
+<style>
+  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+  body {{ font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; color: #333; line-height: 1.6; }}
+  .container {{ max-width: 960px; margin: 0 auto; padding: 20px; }}
+
+  /* Header */
+  .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; border-radius: 12px; padding: 32px; margin-bottom: 24px; }}
+  .header h1 {{ font-size: 24px; margin-bottom: 8px; }}
+  .header .meta {{ opacity: 0.9; font-size: 14px; }}
+  .header .meta span {{ margin-right: 20px; }}
+
+  /* Stats */
+  .stats {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-bottom: 24px; }}
+  .stat-card {{ background: #fff; border-radius: 10px; padding: 16px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }}
+  .stat-card .num {{ font-size: 28px; font-weight: 700; }}
+  .stat-card .label {{ font-size: 12px; color: #666; margin-top: 4px; }}
+
+  /* Vuln by type */
+  .vuln-type {{ background: #fff; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }}
+  .vuln-type h2 {{ font-size: 18px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #eee; }}
+  .type-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }}
+  .type-item {{ display: flex; justify-content: space-between; padding: 8px 12px; border-radius: 6px; background: #f8f9fa; font-size: 14px; }}
+  .type-item .count {{ font-weight: 600; }}
+
+  /* Analysis card */
+  .analysis-card {{ background: #fff; border-radius: 10px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; }}
+  .card-header {{ padding: 16px 20px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }}
+  .card-header:hover {{ filter: brightness(0.97); }}
+  .card-header .left {{ display: flex; align-items: center; gap: 10px; }}
+  .severity-badge {{ display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; color: #fff; }}
+  .vuln-title {{ font-weight: 600; font-size: 15px; }}
+  .card-body {{ padding: 0 20px 20px; display: none; }}
+  .card-body.open {{ display: block; }}
+
+  .section {{ margin-bottom: 16px; }}
+  .section h4 {{ font-size: 14px; color: #666; margin-bottom: 6px; }}
+  .section p {{ font-size: 14px; }}
+
+  .code-block {{ background: #1e1e1e; color: #d4d4d4; border-radius: 8px; padding: 16px; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 13px; overflow-x: auto; line-height: 1.5; white-space: pre-wrap; }}
+
+  .ref-link {{ display: inline-block; margin-right: 8px; color: #667eea; font-size: 13px; text-decoration: none; }}
+  .ref-link:hover {{ text-decoration: underline; }}
+
+  .toggle-icon {{ font-size: 20px; color: #999; transition: transform 0.2s; }}
+  .toggle-icon.open {{ transform: rotate(180deg); }}
+
+  .footer {{ text-align: center; padding: 20px; color: #999; font-size: 13px; }}
+
+  @media (max-width: 640px) {{
+    .header {{ padding: 20px; }}
+    .stats {{ grid-template-columns: repeat(2, 1fr); }}
+  }}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>馃洝锔?VulnSight 瀹夊叏鍒嗘瀽鎶ュ憡</h1>
+    <div class="meta">
+      <span>馃幆 {target}</span>
+      <span>鈴?{scan_time}</span>
+      <span>馃搳 {total} 涓紡娲?/span>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat-card" style="border-left: 4px solid #dc3545;"><div class="num" style="color:#dc3545;">{high_count}</div><div class="label">楂樺嵄 / 涓ラ噸</div></div>
+    <div class="stat-card" style="border-left: 4px solid #ffc107;"><div class="num" style="color:#e6a800;">{med_count}</div><div class="label">涓嵄</div></div>
+    <div class="stat-card" style="border-left: 4px solid #20c997;"><div class="num" style="color:#20c997;">{low_count}</div><div class="label">浣庡嵄</div></div>
+    <div class="stat-card" style="border-left: 4px solid #6c757d;"><div class="num" style="color:#6c757d;">{info_count}</div><div class="label">淇℃伅</div></div>
+  </div>
+
+  <div class="vuln-type">
+    <h2>婕忔礊绫诲瀷鍒嗗竷</h2>
+    <div class="type-grid">
+      {type_items}
+    </div>
+  </div>
+
+  <h2 style="margin-bottom:12px;">璇︾粏鍒嗘瀽</h2>
+  {analysis_cards}
+
+  <div class="footer">
+    Generated by VulnSight v{version} &mdash; Powered by AI
+  </div>
+</div>
+<script>
+document.querySelectorAll('.card-header').forEach(h => {{
+  h.addEventListener('click', () => {{
+    const body = h.nextElementSibling;
+    const icon = h.querySelector('.toggle-icon');
+    body.classList.toggle('open');
+    icon.classList.toggle('open');
+  }});
+}});
+</script>
+</body>
+</html>"""
+
+
+def _severity_color(sev: str) -> str:
+    return SEVERITY_COLORS.get(sev, "#6c757d")
+
+
+def _severity_bg(sev: str) -> str:
+    return SEVERITY_BG.get(sev, "#f8f9fa")
+
+
+def generate_html(analysis_result: dict, version: str = "0.1.0") -> str:
+    """鐢熸垚 HTML 鎶ュ憡"""
+    summary = analysis_result["report_summary"]
+    analyses = analysis_result["analyses"]
+    sev = summary["by_severity"]
+
+    # 绫诲瀷鍒嗗竷 HTML
+    type_items = []
+    for t, c in sorted(summary["by_type"].items()):
+        type_items.append(
+            f'<div class="type-item"><span>{t}</span><span class="count">{c}</span></div>'
+        )
+
+    # 鍒嗘瀽鍗＄墖 HTML
+    cards = []
+    for i, a in enumerate(analyses):
+        vuln_type = a.get("fix_title", a["type"])
+        severity = a["severity"]
+        bg = _severity_bg(severity)
+        color = _severity_color(severity)
+        code = a.get("code_example", "")
+
+        # Format references
+        refs = a.get("references", [])
+        ref_html = ""
+        if refs:
+            ref_html = "".join(
+                f'<a class="ref-link" href="#">馃敆 {r}</a>' for r in refs[:3]
+            )
+
+        code_html = (
+            f'<div class="code-block">{code}</div>' if code else ""
+        )
+
+        cards.append(f"""\
+  <div class="analysis-card">
+    <div class="card-header" style="background:{bg};">
+      <div class="left">
+        <span class="severity-badge" style="background:{color};">{severity}</span>
+        <span class="vuln-title">{vuln_type}</span>
+      </div>
+      <span class="toggle-icon">鈻?/span>
+    </div>
+    <div class="card-body">
+      <div class="section">
+        <h4>馃摑 鎻忚堪</h4>
+        <p>{a.get('description', '')}</p>
+      </div>
+      <div class="section">
+        <h4>馃挜 褰卞搷</h4>
+        <p>{a.get('impact', '')}</p>
+      </div>
+      <div class="section">
+        <h4>馃敡 淇鏂规</h4>
+        <p>{a.get('fix_summary', '')}</p>
+      </div>
+      {code_html}
+      {ref_html}
+    </div>
+  </div>""")
+
+    return HTML_TEMPLATE.format(
+        target=summary["target"],
+        scan_time=summary["scan_time"],
+        total=summary["total"],
+        high_count=sev.get("critical", 0) + sev.get("high", 0),
+        med_count=sev.get("medium", 0),
+        low_count=sev.get("low", 0),
+        info_count=sev.get("info", 0),
+        type_items="".join(type_items),
+        analysis_cards="".join(cards),
+        version=version,
+    )
+
+
+def generate_markdown(analysis_result: dict) -> str:
+    """鐢熸垚 Markdown 鎶ュ憡"""
+    summary = analysis_result["report_summary"]
+    analyses = analysis_result["analyses"]
+    lines = []
+
+    lines.append(f"# 馃洝锔?VulnSight 瀹夊叏鍒嗘瀽鎶ュ憡\n")
+    lines.append(f"- **鐩爣**: {summary['target']}")
+    lines.append(f"- **鎵弿鏃堕棿**: {summary['scan_time']}")
+    lines.append(f"- **鎵弿鑰楁椂**: {summary['duration']}")
+    lines.append(f"- **婕忔礊鎬绘暟**: {summary['total']}\n")
+
+    lines.append("## 馃搳 婕忔礊鍒嗗竷\n")
+    lines.append("| 涓ラ噸绋嬪害 | 鏁伴噺 |")
+    lines.append("|----------|------|")
+    sev = summary["by_severity"]
+    for s in ["critical", "high", "medium", "low", "info"]:
+        if sev.get(s, 0):
+            lines.append(f"| {s} | {sev[s]} |")
+
+    lines.append("\n| 绫诲瀷 | 鏁伴噺 |")
+    lines.append("|------|------|")
+    for t, c in sorted(summary["by_type"].items()):
+        lines.append(f"| {t} | {c} |")
+
+    lines.append("\n---\n")
+    lines.append("## 馃攳 璇︾粏鍒嗘瀽\n")
+
+    for i, a in enumerate(analyses, 1):
+        vuln_type = a.get("fix_title", a["type"])
+        severity = a["severity"]
+        lines.append(f"### {i}. {vuln_type} ({severity})\n")
+        lines.append(f"- **鎻忚堪**: {a.get('description', '')}")
+        lines.append(f"- **褰卞搷**: {a.get('impact', '')}")
+        lines.append(f"- **淇**: {a.get('fix_summary', '')}")
+        code = a.get("code_example", "")
+        if code:
+            lines.append(f"\n```python\n{code}\n```")
+        refs = a.get("references", [])
+        if refs:
+            lines.append(f"\n鍙傝€? {', '.join(refs[:3])}")
+        lines.append("")
+
+    lines.append("---\n")
+    lines.append(f"*Generated by VulnSight 0.1.0 鈥?Powered by AI*")
+    return "\n".join(lines)
+
+
+def save_report(report_content: str, output_path: str | Path) -> Path:
+    """淇濆瓨鎶ュ憡鍒版枃浠?""
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(report_content, encoding="utf-8")
+    return output_path

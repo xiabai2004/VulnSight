@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vulnsight"
+version = "0.1.0"
+description = "Vulsense 鈥?AI-powered vulnerability report analyzer. Takes RayScan scan results and generates human-readable fix reports."
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "xiabai2004"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "Topic :: Security",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+requires-python = ">=3.9"
+dependencies = [
+    "requests>=2.28.0",
+    "rich>=13.0.0",
+    "jinja2>=3.1.0",
+    "markdown>=3.4.0",
+]
+
+[project.scripts]
+vulnsight = "vulnsight.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["vulnsight*"]
+exclude = ["tests*"]

@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+*.whl
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test / report output
+test_*.html
+test_*.md
+test_report.*
+*.html
+
+# Env
+.env
+venv/
+.venv/
+
+# Scan data
+scan_reports/
