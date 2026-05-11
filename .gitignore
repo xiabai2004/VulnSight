@@ -29,3 +29,9 @@ venv/
 
 # Scan data
 scan_reports/
+
+publish*.py
+
+*.bat
+
+create_repo*
