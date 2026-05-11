@@ -1,0 +1,89 @@
+name: CI — Test & Lint
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-cov
+          pip install -e .
+
+      - name: Lint with flake8
+        run: |
+          pip install flake8
+          flake8 vulnsight/ --count --max-line-length=120 --statistics
+
+      - name: Run tests
+        run: |
+          pytest tests/ -v --cov=vulnsight --cov-report=term-missing
+
+      - name: Test CLI help
+        run: |
+          vulnsight --help
+          vulnsight -V
+
+      - name: Test parsing sample report
+        run: |
+          python -c "
+          import json
+          from pathlib import Path
+          from vulnsight.parser import parse_file, Vulnerability
+          
+          # Create a minimal test report
+          report = {
+              'tool': 'RayScan',
+              'target': 'http://test.local/',
+              'scan_time': '2026-01-01T00:00:00',
+              'duration_seconds': 60,
+              'total_vulnerabilities': 2,
+              'vulnerabilities_by_type': {'sql_injection': 1, 'xss': 1},
+              'vulnerabilities': [
+                  {'type': 'sql_injection', 'url': 'http://test.local/page?id=1',
+                   'parameter': 'id', 'module': 'sqli', 'severity': 'high',
+                   'evidence': 'Boolean difference', 'payload': \"' OR '1'='1\"},
+                  {'type': 'cross_site_scripting', 'url': 'http://test.local/page',
+                   'parameter': 'q', 'module': 'xss', 'severity': 'medium',
+                   'evidence': 'Reflected', 'payload': '<script>alert(1)</script>'},
+              ]
+          }
+          p = Path('test_report.json')
+          p.write_text(json.dumps(report))
+          r = parse_file('test_report.json')
+          assert r.total_vulnerabilities == 2
+          assert r.vulnerabilities[0].type == 'sql_injection'
+          assert r.vulnerabilities[1].severity == 'medium'
+          
+          from vulnsight.reporter import generate_html, generate_markdown
+          from vulnsight.analyzer import Analyzer
+          
+          a = Analyzer()  # template mode
+          result = a.analyze_report(r)
+          html = generate_html(result)
+          assert len(html) > 100
+          md = generate_markdown(result)
+          assert len(md) > 50
+          
+          p.unlink()
+          print('All tests passed!')
+          "
